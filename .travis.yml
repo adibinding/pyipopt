@@ -1,0 +1,53 @@
+language: python
+
+python:
+  - "3.6"
+
+compiler:
+  - gcc
+cache:
+  directories:
+    - ipopt
+
+before_install:
+  - sudo apt-get install gfortran liblapack-dev libblas-dev openmpi-bin libopenmpi-dev
+  # coinor-libipopt-dev not working -> install manually
+  - if ! [[ -f ipopt/usr/lib/libipopt.so ]]; then
+      pkgver="3.2.1"
+      wget -O - "https://www.coin-or.org/download/source/Ipopt/Ipopt-${pkgver}.tgz" | tar -xzf -
+      mv Ipopt-${pkgver} src
+      for d in ASL Metis Mumps ; do
+        pushd "src/ThirdParty/${d}"
+        ./get.${d}
+        popd
+      mkdir -p build && pushd build
+      "../src/configure" --prefix=/usr
+      make
+      PKG_CONFIG_LIBDIR="ipopt/usr/lib/pkgconfig/" make DESTDIR="ipopt" install
+      sed -i -e "s:prefix=/usr:prefix=${pwd}/ipopt/usr" ipopt/usr/lib/pkgconfig/ipopt.pc
+   fi
+
+      
+addons:
+  apt:
+    update: true
+
+install:
+    - PKG_CONFIG_PATH="ipopt/usr/lib/pkgconfig/" ./setup.py install
+
+script:
+    - for script in examples/* ; do mpiexec -np 4 python "$script" || exit 1 ; done
+
+
+#deploy:
+#  - provider: pypi
+#    user: g-braeunlich
+#    password:
+#      secure: 
+#    distributions: sdist bdist_wheel
+#    upload_docs: false
+#    on:
+#      repo: g-braeunlich/pyipopt
+#      python: 3.6
+#      condition: $DEPLOY_ENV == "true"
+#      tags: true
